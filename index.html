@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AutorIA · Recupera tu voz en el manuscrito</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&family=Public+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<style>
+:root{
+  --bg:#E9EEF2; --surface:#FFFFFF; --ink:#17233A; --muted:#5B6A80; --line:#C9D3DD;
+  --own:#2E6B5E; --own-soft:#DCEBE6; --gen:#B7791F; --gen-soft:#F6EAD4; --hot:#A33B3B; --hot-soft:#F4DEDE;
+  --serif:"Newsreader",Georgia,"Times New Roman",serif;
+  --sans:"Public Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#121A26; --surface:#1B2533; --ink:#E4EAF2; --muted:#98A6B8; --line:#2E3B4D;
+    --own:#6FBFA9; --own-soft:#1E3530; --gen:#E0A94A; --gen-soft:#3A2F1A; --hot:#E07D7D; --hot-soft:#3D2222;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.5}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--own);outline-offset:2px}
+.wrap{max-width:1240px;margin:0 auto;padding:24px 20px 60px}
+header{border-bottom:2px solid var(--ink);padding-bottom:18px;margin-bottom:24px;display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap;align-items:end}
+header h1{font-family:var(--serif);font-weight:600;font-size:clamp(2rem,4vw,3rem);line-height:1.05;margin:0}
+header p{margin:.5rem 0 0;max-width:62ch;color:var(--muted)}
+.cfg{display:flex;gap:8px;flex-wrap:wrap;align-items:end}
+.cfg label{font-size:.8rem;color:var(--muted);display:block}
+input[type=text],input[type=password],select,textarea{background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:.45rem .6rem}
+textarea{width:100%;font-family:var(--serif);font-size:1.05rem;line-height:1.65;resize:vertical}
+.btn{border:1px solid var(--ink);background:var(--ink);color:var(--surface);border-radius:4px;padding:.5rem .9rem;cursor:pointer;font-weight:600}
+.btn.ghost{background:transparent;color:var(--ink)} .btn.small{padding:.3rem .6rem;font-size:.85rem}
+.btn:disabled{opacity:.5;cursor:wait}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:.7rem 0}
+.intake{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:18px}
+.intake textarea{min-height:220px;background:var(--bg)}
+.grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:28px}
+@media (max-width:960px){.grid{grid-template-columns:1fr}}
+/* The memorable element: the manuscript with a margin gauge */
+.ms{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:28px 28px 28px 20px}
+.para{display:grid;grid-template-columns:10px 1fr;gap:16px;margin-bottom:18px;cursor:pointer;border-radius:4px}
+.para:hover .txt,.para.sel .txt{background:var(--bg)}
+.para.sel .txt{box-shadow:inset 0 0 0 1px var(--line)}
+.gauge{border-radius:5px;background:var(--line);position:relative;overflow:hidden}
+.gauge i{position:absolute;left:0;right:0;bottom:0;border-radius:5px}
+.txt{font-family:var(--serif);font-size:1.05rem;line-height:1.7;padding:4px 8px;max-width:72ch}
+.txt.head{font-family:var(--sans);font-weight:700;font-size:1rem}
+.para.done .txt{border-left:3px solid var(--own);padding-left:10px}
+.stock{background:var(--gen-soft);border-bottom:1px dotted var(--gen)}
+.side{align-self:start;position:sticky;top:16px}
+@media (max-width:960px){.side{position:static}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:18px;margin-bottom:16px}
+.panel h2{font-family:var(--serif);font-weight:600;font-size:1.35rem;margin:0 0 .4rem}
+.panel h3{font-size:.95rem;margin:1rem 0 .3rem}
+.muted{color:var(--muted);font-size:.88rem}
+.orig{font-family:var(--serif);font-size:.98rem;line-height:1.6;background:var(--bg);border-radius:4px;padding:10px 12px;max-height:180px;overflow:auto}
+.sig{display:grid;grid-template-columns:1fr auto;gap:2px 12px;font-size:.88rem;margin:.4rem 0}
+.sig span:nth-child(even){text-align:right;font-weight:600}
+.q{margin:.8rem 0}
+.q p{margin:0 0 .3rem;font-weight:600}
+.q textarea{min-height:60px;font-size:.95rem;background:var(--bg)}
+#rewrite{min-height:180px;background:var(--bg)}
+.meter{display:flex;gap:16px;flex-wrap:wrap;font-size:.85rem;color:var(--muted)}
+.meter b{color:var(--ink)}
+.warn{background:var(--gen-soft);color:var(--ink);border-left:4px solid var(--gen);padding:8px 12px;font-size:.9rem;margin:.6rem 0}
+.good{background:var(--own-soft);border-left:4px solid var(--own);padding:8px 12px;font-size:.9rem;margin:.6rem 0}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:.85rem;color:var(--muted);margin:.4rem 0 1rem}
+.legend i{display:inline-block;width:10px;height:14px;border-radius:3px;vertical-align:-2px;margin-right:5px}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--surface);padding:.6rem 1rem;border-radius:4px;display:none;z-index:10;max-width:90vw}
+footer{border-top:1px solid var(--line);margin-top:40px;padding-top:16px;font-size:.85rem;color:var(--muted)}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div>
+    <h1>AutorIA</h1>
+    <p>Señala los párrafos que suenan más genéricos, te hace preguntas sobre lo que quieres decir y te deja reescribirlos tú. La IA nunca te propone frases: solo pregunta y comprueba que no pierdes contenido.</p>
+  </div>
+  <div class="cfg">
+    <div><label for="key">Clave de OpenAI</label><input type="password" id="key" placeholder="sk-..." style="width:170px"></div>
+    <div><label for="model">Modelo</label><select id="model"></select></div>
+    <button class="btn small ghost" id="loadModels">Cargar mis modelos</button>
+  </div>
+</header>
+
+<section id="intake" class="intake">
+  <h2 style="font-family:var(--serif);margin:0 0 .4rem">Tu manuscrito</h2>
+  <p class="muted">Pega el texto o sube el archivo. Separa los párrafos con una línea en blanco.</p>
+  <textarea id="source" placeholder="Pega aquí el texto del paper"></textarea>
+  <div class="row">
+    <label class="btn ghost" style="margin:0">Subir PDF, DOCX, TXT, MD o TEX<input type="file" id="file" accept=".pdf,.docx,.txt,.md,.tex" hidden></label>
+    <input type="text" id="title" placeholder="Título (opcional)" style="flex:1;min-width:200px">
+    <button class="btn" id="start">Analizar párrafos</button>
+  </div>
+</section>
+
+<section id="work" class="hidden">
+  <div class="row" style="justify-content:space-between">
+    <div class="legend">
+      <span><i style="background:var(--own)"></i>Voz propia</span>
+      <span><i style="background:var(--gen)"></i>Revisar</span>
+      <span><i style="background:var(--hot)"></i>Muy genérico</span>
+      <span><span class="stock">expresión comodín</span></span>
+    </div>
+    <div class="row" style="margin:0">
+      <button class="btn small ghost" id="nextHot">Siguiente párrafo a revisar</button>
+      <button class="btn small ghost" id="exportMd">Descargar texto</button>
+      <button class="btn small ghost" id="exportLog">Descargar registro de autoría</button>
+      <button class="btn small" id="exportProc">Exportar a ProcedencIA</button>
+      <button class="btn small ghost" id="newDoc">Otro documento</button>
+    </div>
+  </div>
+  <p class="muted" id="summary"></p>
+  <div class="grid">
+    <div class="ms" id="ms"></div>
+    <div class="side" id="side">
+      <div class="panel"><h2>Elige un párrafo</h2><p class="muted">Haz clic en cualquier párrafo del manuscrito. La barra del margen resume sus indicadores de estilo: frases de longitud muy uniforme, expresiones comodín y arranques con conectores de relleno. Son pistas para decidir dónde volver a escribir con tus palabras, no una predicción de lo que dirá ningún detector.</p></div>
+    </div>
+  </div>
+</section>
+
+<footer>AutorIA · Fernando Borrás Rocher, Universidad Miguel Hernández de Elche. No reescribe tu texto ni sirve para eludir detectores: su propósito es que el texto final sea realmente tuyo y que quede constancia de ello. El registro distingue lo que tecleas de lo que pegas y puede importarse en ProcedencIA como punto de control.</footer>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const toast=m=>{const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',3200)};
+const words=t=>(t.trim().match(/\S+/g)||[]).length;
+if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+/* ---------- persistence ---------- */
+const DB={db:null,
+  open(){return new Promise((res,rej)=>{const r=indexedDB.open('autoria',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>{this.db=r.result;res()};r.onerror=()=>rej(r.error)})},
+  get(k){return new Promise(res=>{try{const r=this.db.transaction('kv').objectStore('kv').get(k);r.onsuccess=()=>res(r.result);r.onerror=()=>res(null)}catch(e){res(null)}})},
+  set(k,v){return new Promise(res=>{try{const tx=this.db.transaction('kv','readwrite');tx.objectStore('kv').put(v,k);tx.oncomplete=()=>res(true);tx.onerror=()=>res(false)}catch(e){res(false)}})}
+};
+let S=null; // {title, createdAt, paras:[{id,original,current,head,rewrites:[],questions:[],answers:[],fidelity}]}
+const save=()=>DB.set('doc',S);
+
+/* ---------- style indicators (local, no API) ---------- */
+const STOCK=[
+ 'cabe destacar','es importante destacar','es importante señalar','es crucial','es fundamental','juega un papel','desempeña un papel','en el panorama actual','en la era de','en este contexto','en última instancia','un enfoque integral','un enfoque holístico','multifacétic','sin precedentes','no solo','sino también','profundizar en','arrojar luz','pone de manifiesto','subraya la importancia','abordar los desafíos','de manera significativa','paradigma','sinergia','robusto','en conclusión','en resumen','en definitiva',
+ 'delve','it is important to note','it is worth noting','plays a crucial role','plays a pivotal role','crucial','pivotal','landscape','multifaceted','underscore','highlights the importance','in today\'s','in the realm of','navigate the complexities','shed light','a testament to','not only','but also','holistic','seamless','robust','leverage','foster','tapestry','intricate','nuanced','in conclusion','overall,','ultimately','paradigm','synergy','unprecedented','comprehensive'
+];
+const CONNECT=/^(además|asimismo|por otro lado|por otra parte|en este sentido|en conclusión|en resumen|en definitiva|no obstante|sin embargo|finalmente|moreover|furthermore|additionally|in addition|however|overall|ultimately|consequently|importantly|notably|in conclusion|in summary)\b/i;
+function sentences(t){return t.replace(/\s+/g,' ').split(/(?<=[.!?;])\s+(?=[A-ZÁÉÍÓÚÑ¿¡"“(])/).filter(s=>words(s)>2)}
+function signals(t){
+  const w=words(t);if(w<35)return null;
+  const ss=sentences(t);const lens=ss.map(words);const mean=lens.reduce((a,b)=>a+b,0)/(lens.length||1);
+  const sd=Math.sqrt(lens.reduce((a,b)=>a+(b-mean)**2,0)/(lens.length||1));const cv=lens.length>2?sd/mean:0.5;
+  const low=t.toLowerCase();let stock=0;const hits=[];STOCK.forEach(p=>{const n=low.split(p).length-1;if(n){stock+=n;hits.push(p)}});
+  const conn=ss.filter(s=>CONNECT.test(s.trim())).length/(ss.length||1);
+  const tri=(t.match(/\b[\wáéíóúñ-]+, [\wáéíóúñ-]+,? (y|e|and|or|o) [\wáéíóúñ-]+/gi)||[]).length;
+  const per100=stock*100/w;
+  let score=per100*22+Math.max(0,0.38-cv)*140+conn*55+tri*6;score=Math.max(0,Math.min(100,Math.round(score)));
+  return {score,cv:+cv.toFixed(2),stock,per100:+per100.toFixed(1),conn:Math.round(conn*100),tri,hits,nsent:ss.length,words:w};
+}
+const band=s=>s==null?null:s>=55?'hot':s>=28?'gen':'own';
+const bandColor=b=>({own:'var(--own)',gen:'var(--gen)',hot:'var(--hot)'}[b]||'var(--line)');
+function markStock(t,hits){let h=esc(t);[...hits].sort((a,b)=>b.length-a.length).forEach(p=>{const re=new RegExp('('+esc(p).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi');h=h.replace(re,'<span class="stock">$1</span>')});return h}
+
+/* ---------- file reading ---------- */
+async function readFile(f){
+  const ext=f.name.split('.').pop().toLowerCase();
+  if(ext==='pdf'){const pdf=await pdfjsLib.getDocument({data:await f.arrayBuffer()}).promise;let out=[];
+    for(let i=1;i<=pdf.numPages;i++){const p=await pdf.getPage(i);const c=await p.getTextContent();let s='';c.items.forEach(it=>{s+=it.str+(it.hasEOL?'\n':' ')});out.push(s)}
+    return out.join('\n').replace(/([^.\n:])\n(?=[a-záéíóúñ])/g,'$1 ').replace(/\n(?=[A-ZÁÉÍÓÚÑ0-9])/g,'\n\n')}
+  if(ext==='docx'){const r=await mammoth.extractRawText({arrayBuffer:await f.arrayBuffer()});return r.value}
+  return await f.text();
+}
+function split(text){
+  let blocks=text.replace(/\r/g,'').split(/\n\s*\n/).map(s=>s.replace(/\s*\n\s*/g,' ').trim()).filter(Boolean);
+  if(blocks.length<3)blocks=text.split(/\n/).map(s=>s.trim()).filter(Boolean);
+  return blocks.map(b=>({id:crypto.randomUUID(),original:b,current:b,head:words(b)<14&&!/[.!?]$/.test(b),rewrites:[],questions:[],answers:[],fidelity:null}));
+}
+
+/* ---------- OpenAI ---------- */
+const FALLBACK_MODELS=['gpt-4o-mini','gpt-4.1-mini','gpt-4o','gpt-5.6-luna','gpt-5.6-terra','gpt-5.6-sol'];
+function fillModels(list){const cur=localStorage.getItem('ia_openai_model')||'gpt-4o-mini';$('#model').innerHTML=list.map(m=>`<option ${m===cur?'selected':''}>${esc(m)}</option>`).join('')}
+$('#loadModels').onclick=async()=>{const key=$('#key').value.trim();if(!key){toast('Escribe primero tu clave de API');return}
+  try{const r=await fetch('https://api.openai.com/v1/models',{headers:{Authorization:'Bearer '+key}});if(!r.ok)throw new Error('la API respondió '+r.status);
+    const d=await r.json();const list=d.data.map(m=>m.id).filter(id=>/^(gpt-4o|gpt-4\.1|gpt-5|o\d)/.test(id)&&!/(audio|realtime|tts|transcribe|image|search|embedding)/.test(id)).sort();
+    fillModels(list.length?list:FALLBACK_MODELS);toast(list.length+' modelos disponibles')}catch(e){toast('No se pudieron cargar: '+e.message)}};
+$('#key').oninput=()=>localStorage.setItem('ia_openai_key',$('#key').value.trim());
+$('#model').onchange=()=>localStorage.setItem('ia_openai_model',$('#model').value);
+async function callLLM(system,user){
+  const key=$('#key').value.trim();if(!key)throw new Error('Falta la clave de API de OpenAI');
+  const model=$('#model').value;const body={model,messages:[{role:'system',content:system},{role:'user',content:user}],response_format:{type:'json_object'}};
+  if(/^(gpt-5|o\d)/.test(model))body.max_completion_tokens=4000;else{body.max_tokens=1500;body.temperature=0.4}
+  const r=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+key},body:JSON.stringify(body)});
+  if(!r.ok)throw new Error('La API respondió '+r.status);
+  const d=await r.json();return JSON.parse(d.choices[0].message.content.replace(/```json|```/g,'').trim());
+}
+
+/* ---------- manuscript view ---------- */
+let sel=-1;
+function renderMs(){
+  const scored=S.paras.map(p=>p.head?null:signals(p.current));
+  $('#ms').innerHTML=S.paras.map((p,i)=>{const g=scored[i];const b=band(g?.score);
+    return `<div class="para ${i===sel?'sel':''} ${p.rewrites.length?'done':''}" data-i="${i}" tabindex="0" role="button" aria-label="Párrafo ${i+1}">
+      <div class="gauge">${g?`<i style="height:${Math.max(12,g.score)}%;background:${bandColor(b)}"></i>`:''}</div>
+      <div class="txt ${p.head?'head':''}">${g?markStock(p.current,g.hits):esc(p.current)}</div></div>`}).join('');
+  const valid=scored.filter(Boolean);const hot=valid.filter(g=>band(g.score)==='hot').length,gen=valid.filter(g=>band(g.score)==='gen').length;
+  const done=S.paras.filter(p=>p.rewrites.length).length;
+  $('#summary').textContent=`${valid.length} párrafos analizados: ${hot} muy genéricos, ${gen} para revisar. Has reescrito ${done}.`;
+}
+$('#ms').onclick=e=>{const p=e.target.closest('.para');if(p)openPara(+p.dataset.i)};
+$('#ms').onkeydown=e=>{if(e.key==='Enter'){const p=e.target.closest('.para');if(p)openPara(+p.dataset.i)}};
+$('#nextHot').onclick=()=>{const n=S.paras.length;for(let k=1;k<=n;k++){const i=(sel+k+n)%n;const p=S.paras[i];if(p.head||p.rewrites.length)continue;const g=signals(p.current);if(g&&band(g.score)!=='own'){openPara(i);document.querySelector(`.para[data-i="${i}"]`)?.scrollIntoView({behavior:'smooth',block:'center'});return}}toast('No quedan párrafos marcados sin reescribir')};
+
+/* ---------- rewrite session ---------- */
+let track={typed:0,pasted:0,start:0,focusMs:0,lastFocus:0};
+function sigBlock(g){if(!g)return '<p class="muted">Párrafo demasiado breve para medirlo.</p>';
+  return `<div class="sig"><span>Indicador de estilo (0-100)</span><span>${g.score}</span><span>Variación de longitud de frase</span><span>${g.cv}</span><span>Expresiones comodín</span><span>${g.stock}</span><span>Frases que abren con conector</span><span>${g.conn}%</span><span>Enumeraciones de tres</span><span>${g.tri}</span></div>`}
+function openPara(i){
+  sel=i;renderMs();const p=S.paras[i];if(p.head){$('#side').innerHTML='<div class="panel"><h2>Encabezado</h2><p class="muted">Los encabezados no se analizan. Elige un párrafo de texto.</p></div>';return}
+  const g=signals(p.current);track={typed:0,pasted:0,start:Date.now(),focusMs:0,lastFocus:0};
+  $('#side').innerHTML=`<div class="panel">
+    <h2>Párrafo ${i+1}</h2>
+    <div class="orig">${markStock(p.current,g?.hits||[])}</div>
+    ${sigBlock(g)}
+    <h3>1. Piensa antes de escribir</h3>
+    <p class="muted">Pide preguntas sobre lo que este párrafo quiere decir. Respóndelas con tus palabras; te servirán de guion.</p>
+    <button class="btn small" id="askQ">Hazme preguntas</button>
+    <div id="qs">${p.questions.map((q,k)=>qHtml(q,p.answers[k]||'',k)).join('')}</div>
+    <h3>2. Escríbelo tú</h3>
+    <p class="muted">Empieza en blanco, con el original a la vista. Lo que tecleas y lo que pegas se contabilizan por separado.</p>
+    <textarea id="rewrite" placeholder="Tu versión del párrafo">${esc(p.draft||'')}</textarea>
+    <div class="meter"><span>Tecleado <b id="mTyped">0</b></span><span>Pegado <b id="mPasted">0</b></span><span>Tiempo de escritura <b id="mTime">0:00</b></span><span>Indicador <b id="mScore">–</b></span></div>
+    <div id="pasteWarn"></div>
+    <h3>3. Comprueba y guarda</h3>
+    <div class="row"><button class="btn small ghost" id="checkF">Comprobar que no pierdo contenido</button><button class="btn small" id="saveR">Guardar mi versión</button></div>
+    <div id="fid">${p.fidelity?fidHtml(p.fidelity):''}</div>
+    ${p.rewrites.length?`<p class="muted">Versiones guardadas: ${p.rewrites.length}. <button class="btn small ghost" id="revert">Volver al original</button></p>`:''}
+  </div>`;
+  const ta=$('#rewrite');
+  ta.addEventListener('beforeinput',e=>{if(/^insert(Text|LineBreak|Paragraph|CompositionText)$/.test(e.inputType))track.typed+=(e.data||' ').length});
+  ta.addEventListener('paste',e=>{const t=(e.clipboardData||window.clipboardData).getData('text');track.pasted+=t.length;setTimeout(meter,0)});
+  ta.addEventListener('drop',e=>{const t=e.dataTransfer.getData('text');track.pasted+=t.length;setTimeout(meter,0)});
+  ta.addEventListener('focus',()=>track.lastFocus=Date.now());
+  ta.addEventListener('blur',()=>{if(track.lastFocus){track.focusMs+=Date.now()-track.lastFocus;track.lastFocus=0}});
+  ta.addEventListener('input',()=>{p.draft=ta.value;meter();clearTimeout(ta._s);ta._s=setTimeout(save,800)});
+  $('#askQ').onclick=()=>askQuestions(i);
+  $('#checkF').onclick=()=>checkFidelity(i);
+  $('#saveR').onclick=()=>saveRewrite(i);
+  if($('#revert'))$('#revert').onclick=async()=>{p.current=p.original;p.rewrites=[];p.fidelity=null;await save();openPara(i)};
+  $('#qs').oninput=e=>{const k=e.target.dataset.a;if(k!==undefined){p.answers[+k]=e.target.value;clearTimeout($('#qs')._s);$('#qs')._s=setTimeout(save,800)}};
+  clearInterval(window._tick);window._tick=setInterval(meter,1000);meter();
+}
+function secs(){return Math.round((track.focusMs+(track.lastFocus?Date.now()-track.lastFocus:0))/1000)}
+function meter(){const ta=$('#rewrite');if(!ta)return;$('#mTyped').textContent=track.typed;$('#mPasted').textContent=track.pasted;
+  const s=secs();$('#mTime').textContent=Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
+  const g=signals(ta.value);$('#mScore').textContent=g?g.score:'–';
+  const tot=track.typed+track.pasted;$('#pasteWarn').innerHTML=tot>80&&track.pasted/tot>0.5?'<div class="warn">La mayor parte de este párrafo se ha pegado. Si procede de otra herramienta, el registro de autoría lo reflejará así.</div>':''}
+const qHtml=(q,a,k)=>`<div class="q"><p>${esc(q)}</p><textarea data-a="${k}" placeholder="Tu respuesta">${esc(a)}</textarea></div>`;
+async function askQuestions(i){const p=S.paras[i];const b=$('#askQ');b.disabled=true;b.textContent='Pensando preguntas…';
+  const ctx=S.paras.slice(Math.max(0,i-1),i+2).map(x=>x.current).join('\n\n');
+  const sys=`Eres un tutor de escritura académica que ayuda a un autor a expresar SUS PROPIAS ideas. Recibes un párrafo de su manuscrito. Formula entre 3 y 4 preguntas breves y concretas que le obliguen a precisar qué afirma exactamente, en qué evidencia o experiencia propia se apoya, qué postura concreta defiende frente a alternativas y qué ejemplo propio lo ilustraría. REGLAS ESTRICTAS: no reescribas el párrafo, no propongas frases, sinónimos, títulos ni estructuras, no incluyas en las preguntas fragmentos que el autor pueda copiar como texto. Responde en el idioma del párrafo con JSON: {"foco":"una frase sobre qué parece más vago o genérico","preguntas":["...","..."]}`;
+  try{const r=await callLLM(sys,`Contexto cercano:\n"""${ctx}"""\n\nPárrafo a trabajar:\n"""${p.current}"""`);
+    p.questions=(r.preguntas||[]).slice(0,4);p.answers=[];await save();
+    $('#qs').innerHTML=(r.foco?`<p class="muted" style="margin-top:.6rem">${esc(r.foco)}</p>`:'')+p.questions.map((q,k)=>qHtml(q,'',k)).join('')}
+  catch(e){toast(e.message)}finally{b.disabled=false;b.textContent='Hazme otras preguntas'}}
+function fidHtml(f){const ok=f.conserva_sentido&&!(f.perdidas||[]).length;
+  return `<div class="${ok?'good':'warn'}"><strong>${ok?'Conserva el contenido del original.':'Revisa estas diferencias.'}</strong>
+  ${(f.perdidas||[]).length?'<br>Se pierde: '+f.perdidas.map(esc).join('; '):''}
+  ${(f.anadidos||[]).length?'<br>Se añade: '+f.anadidos.map(esc).join('; '):''}</div>`}
+async function checkFidelity(i){const p=S.paras[i];const t=$('#rewrite').value.trim();if(words(t)<10){toast('Escribe primero tu versión');return}
+  const b=$('#checkF');b.disabled=true;b.textContent='Comprobando…';
+  const sys=`Compara el párrafo ORIGINAL de un manuscrito con la VERSIÓN del autor. Indica solo si la versión conserva las afirmaciones, datos y referencias del original, qué contenido sustantivo se pierde y qué se añade. No valores el estilo, no sugieras redacciones ni frases. Responde en español con JSON: {"conserva_sentido":true|false,"perdidas":["descripción breve"],"anadidos":["descripción breve"]}`;
+  try{p.fidelity=await callLLM(sys,`ORIGINAL:\n"""${p.current}"""\n\nVERSIÓN DEL AUTOR:\n"""${t}"""`);await save();$('#fid').innerHTML=fidHtml(p.fidelity)}
+  catch(e){toast(e.message)}finally{b.disabled=false;b.textContent='Comprobar que no pierdo contenido'}}
+async function saveRewrite(i){const p=S.paras[i];const t=$('#rewrite').value.trim();if(words(t)<10){toast('Tu versión es demasiado corta');return}
+  const before=signals(p.current),after=signals(t);
+  p.rewrites.push({date:new Date().toISOString(),from:p.current,text:t,typed:track.typed,pasted:track.pasted,seconds:secs(),before:before?.score??null,after:after?.score??null,answers:p.answers.slice()});
+  p.current=t;p.draft='';p.fidelity=null;await save();toast('Versión guardada');openPara(i)}
+
+/* ---------- export ---------- */
+function totals(){let typed=0,pasted=0,seconds=0,n=0;S.paras.forEach(p=>{if(p.rewrites.length)n++;p.rewrites.forEach(r=>{typed+=r.typed;pasted+=r.pasted;seconds+=r.seconds})});return{paragraphs:n,typed,pasted,seconds}}
+const fullText=()=>S.paras.map(p=>p.current).join('\n\n');
+function download(name,content,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([content],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
+const slug=()=>(S.title||'manuscrito').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').slice(0,40);
+$('#exportMd').onclick=()=>download(`${slug()}.md`,(S.title?`# ${S.title}\n\n`:'')+fullText(),'text/markdown');
+$('#exportLog').onclick=()=>{const T=totals();
+  let m=`# Registro de autoría\n\n**Manuscrito:** ${S.title||'(sin título)'}  \n**Generado:** ${new Date().toLocaleString('es-ES')} con AutorIA\n\n`;
+  m+=`Párrafos reescritos por el autor: ${T.paragraphs} de ${S.paras.filter(p=>!p.head).length}. Caracteres tecleados: ${T.typed}. Caracteres pegados: ${T.pasted}. Tiempo de escritura: ${Math.round(T.seconds/60)} min.\n\nLa IA se usó únicamente para formular preguntas sobre el contenido y comprobar que las versiones del autor conservaban el sentido; no generó texto del manuscrito.\n\n`;
+  S.paras.forEach((p,i)=>p.rewrites.forEach((r,k)=>{m+=`## Párrafo ${i+1}, versión ${k+1}\n\n${new Date(r.date).toLocaleString('es-ES')} · tecleado ${r.typed} · pegado ${r.pasted} · ${Math.round(r.seconds/60)} min · indicador ${r.before??'–'} → ${r.after??'–'}\n\n**Antes:** ${r.from}\n\n**Después:** ${r.text}\n\n`;if(r.answers?.some(Boolean))m+=`**Notas del autor:** ${r.answers.filter(Boolean).join(' / ')}\n\n`}));
+  download(`registro-autoria-${slug()}.md`,m,'text/markdown')};
+$('#exportProc').onclick=()=>{if(!S.paras.some(p=>p.rewrites.length)){toast('Todavía no has guardado ninguna reescritura');return}
+  download(`autoria-${slug()}.json`,JSON.stringify({app:'AutorIA',version:1,title:S.title,date:new Date().toISOString(),text:fullText(),log:totals()},null,2),'application/json');
+  toast('Impórtalo en ProcedencIA con «Importar desde AutorIA»')};
+$('#newDoc').onclick=async()=>{if(!confirm('Se descartará el documento actual de este navegador. Descarga antes el texto y el registro si los necesitas.'))return;S=null;await DB.set('doc',null);$('#work').classList.add('hidden');$('#intake').classList.remove('hidden');$('#source').value=''};
+
+/* ---------- start ---------- */
+$('#file').onchange=async e=>{const f=e.target.files[0];if(!f)return;toast('Leyendo '+f.name+'…');try{$('#source').value=await readFile(f);if(!$('#title').value)$('#title').value=f.name.replace(/\.[^.]+$/,'')}catch(err){toast('No se pudo leer: '+err.message)}e.target.value=''};
+$('#start').onclick=async()=>{const t=$('#source').value;if(words(t)<60){toast('Pega un texto de al menos unas 60 palabras');return}
+  S={title:$('#title').value.trim(),createdAt:new Date().toISOString(),paras:split(t)};await save();showWork()};
+function showWork(){$('#intake').classList.add('hidden');$('#work').classList.remove('hidden');sel=-1;renderMs()}
+(async()=>{$('#key').value=localStorage.getItem('ia_openai_key')||'';fillModels(FALLBACK_MODELS);
+  try{await DB.open();const d=await DB.get('doc');if(d&&d.paras){S=d;showWork()}}catch(e){toast('Sin almacenamiento local: el trabajo se perderá al cerrar')}})();
+</script>
+</body>
+</html>
